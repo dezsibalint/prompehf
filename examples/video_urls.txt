@@ -1,0 +1,3 @@
+# Add one YouTube video URL per line
+# Example:
+# https://www.youtube.com/watch?v=VIDEO_ID_HERE

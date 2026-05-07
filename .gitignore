@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+data/raw/*.txt
+data/processed/*.txt
+vector_store_id.txt
