@@ -1,6 +1,8 @@
 .env
+.venv/
 __pycache__/
 *.pyc
 data/raw/*.txt
 data/processed/*.txt
+examples/discovered_video_urls.txt
 vector_store_id.txt

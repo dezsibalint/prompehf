@@ -93,6 +93,7 @@ Ezután töltsd ki az `.env` fájlt:
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
 VECTOR_STORE_NAME=league-of-legends-knowledge-base
+YOUTUBE_API_KEY=your_youtube_data_api_key_here
 ```
 
 Fontos: az `.env` fájl nem kerül GitHubra, mert a `.gitignore` tartalmazza.
@@ -106,6 +107,22 @@ examples/video_urls.txt
 ```
 
 Egy sorba egy YouTube video URL kerüljön. Az üres sorokat és a `#` karakterrel kezdődő kommenteket a script figyelmen kívül hagyja.
+
+Opcionális automatikus videókeresés YouTube Data API-val:
+
+```bash
+python src/discover_youtube_guides.py --limit 100 --output examples/video_urls.txt --overwrite
+```
+
+Nagyobb tudásbázishoz például:
+
+```bash
+python src/discover_youtube_guides.py --limit 1000 --months 3 --min-views 50000 --output examples/video_urls.txt --overwrite
+```
+
+Ez a külön modul az elmúlt 3 hónap népszerű, angol felirattal rendelkező League of Legends guide videóit keresi. A meglévő kézi workflow továbbra is működik, mert a `download_transcripts.py` továbbra is az `examples/video_urls.txt` fájlból dolgozik.
+
+Fontos: a YouTube Data API keresési végpontja kvótát használ, és egy lekérés jelentős quota costtal jár. Emiatt a `--limit 1000` parancs technikailag támogatott, de a ténylegesen megtalált videók száma függhet az API kvótától, a keresési találatoktól, a feliratok elérhetőségétől és a szűrőktől.
 
 2. Transcript letöltés:
 
@@ -169,6 +186,7 @@ prompehf/
 │       └── .gitkeep
 ├── src/
 │   ├── download_transcripts.py
+│   ├── discover_youtube_guides.py
 │   ├── preprocess_transcripts.py
 │   ├── upload_knowledge_base.py
 │   ├── ask_coach.py
