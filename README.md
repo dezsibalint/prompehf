@@ -120,11 +120,17 @@ Nagyobb tudásbázishoz például:
 python src/discover_youtube_guides.py --limit 1000 --months 6 --min-views 5000 --max-pages-per-query 15 --output examples/video_urls.txt --append
 ```
 
+Quota-barátabb futtatás, ha a YouTube API napi limited gyorsan elfogy:
+
+```bash
+python src/discover_youtube_guides.py --limit 200 --months 12 --min-views 1000 --caption any --max-pages-per-query 2 --output examples/video_urls.txt --append
+```
+
 Ez a külön modul az elmúlt 3 hónap népszerű, angol felirattal rendelkező League of Legends guide videóit keresi. A meglévő kézi workflow továbbra is működik, mert a `download_transcripts.py` továbbra is az `examples/video_urls.txt` fájlból dolgozik.
 
 A `--append` az alapértelmezett viselkedés, vagyis a script csak az új, még nem szereplő URL-eket fűzi hozzá a fájlhoz. A `--overwrite` akkor hasznos, ha teljesen újra akarod generálni a videólistát.
 
-Fontos: a YouTube Data API keresési végpontja kvótát használ, és egy lekérés jelentős quota costtal jár. Emiatt a `--limit 1000` parancs technikailag támogatott, de a ténylegesen megtalált videók száma függhet az API kvótától, a keresési találatoktól, a feliratok elérhetőségétől és a szűrőktől. Ha kevés találat jön vissza, csökkentsd a `--min-views` értékét, növeld a `--months` értékét, vagy próbáld a `--caption any` kapcsolót.
+Fontos: a YouTube Data API keresési végpontja kvótát használ, és egy keresési oldal jelentős quota costtal jár. Emiatt a `--limit 1000` parancs technikailag támogatott, de a ténylegesen megtalált videók száma függhet az API kvótától, a keresési találatoktól, a feliratok elérhetőségétől és a szűrőktől. Ha kevés találat jön vissza, csökkentsd a `--min-views` értékét, növeld a `--months` értékét, vagy próbáld a `--caption any` kapcsolót. Ha quota hibát kapsz, csökkentsd a `--max-pages-per-query` értékét, vagy várd meg a napi quota resetet.
 
 2. Transcript letöltés:
 

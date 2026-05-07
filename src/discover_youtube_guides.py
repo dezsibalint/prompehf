@@ -47,6 +47,18 @@ DEFAULT_EXCLUDE_TERMS = [
 ]
 
 
+class YouTubeApiError(RuntimeError):
+    """Small wrapper so the script can handle quota errors gracefully."""
+
+    def __init__(self, status_code: int, message: str, reason: str = "") -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.reason = reason
+
+    def is_quota_exceeded(self) -> bool:
+        return self.reason == "quotaExceeded"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Discover recent popular League of Legends guide videos on YouTube."
@@ -138,7 +150,20 @@ def youtube_get(url: str, params: dict[str, Any]) -> dict[str, Any]:
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         details = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"YouTube API request failed with HTTP {error.code}: {details}") from error
+        reason = ""
+        message = details
+
+        try:
+            error_data = json.loads(details)
+            api_error = error_data.get("error", {})
+            message = api_error.get("message", details)
+            errors = api_error.get("errors", [])
+            if errors:
+                reason = errors[0].get("reason", "")
+        except json.JSONDecodeError:
+            pass
+
+        raise YouTubeApiError(error.code, message, reason) from error
     except URLError as error:
         raise RuntimeError(f"Could not connect to YouTube API: {error}") from error
 
@@ -151,7 +176,7 @@ def search_video_ids(
     region: str,
     language: str,
     caption: str,
-) -> list[str]:
+) -> tuple[list[str], bool]:
     """Search YouTube and return candidate video ids."""
     video_ids = []
     next_page_token = None
@@ -175,7 +200,14 @@ def search_video_ids(
         if next_page_token:
             params["pageToken"] = next_page_token
 
-        data = youtube_get(SEARCH_URL, params)
+        try:
+            data = youtube_get(SEARCH_URL, params)
+        except YouTubeApiError as error:
+            if error.is_quota_exceeded():
+                print("YouTube API quota exceeded while searching. Stopping early.")
+                return video_ids, True
+            raise
+
         for item in data.get("items", []):
             video_id = item.get("id", {}).get("videoId")
             if video_id:
@@ -185,7 +217,7 @@ def search_video_ids(
         if not next_page_token:
             break
 
-    return video_ids
+    return video_ids, False
 
 
 def chunked(items: list[str], size: int) -> list[list[str]]:
@@ -228,6 +260,17 @@ def title_contains_excluded_term(video: dict[str, Any], exclude_terms: list[str]
     return any(term.lower() in title for term in exclude_terms)
 
 
+def make_quota_limited_video(video_id: str) -> dict[str, Any]:
+    return {
+        "id": video_id,
+        "title": "Unknown title because quota was exceeded",
+        "channel": "Unknown channel",
+        "published_at": "",
+        "view_count": 0,
+        "url": f"https://www.youtube.com/watch?v={video_id}",
+    }
+
+
 def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
     api_key = require_youtube_api_key()
     published_after = months_ago_as_iso(args.months)
@@ -237,27 +280,47 @@ def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
 
     candidate_ids = []
     seen_ids = set()
+    quota_exceeded = False
 
     for query in args.queries:
         print(f"Searching query: {query}")
-        query_ids = search_video_ids(
-            api_key=api_key,
-            query=query,
-            published_after=published_after,
-            max_pages=args.max_pages_per_query,
-            region=args.region,
-            language=args.language,
-            caption=args.caption,
-        )
+        try:
+            query_ids, query_hit_quota = search_video_ids(
+                api_key=api_key,
+                query=query,
+                published_after=published_after,
+                max_pages=args.max_pages_per_query,
+                region=args.region,
+                language=args.language,
+                caption=args.caption,
+            )
+        except YouTubeApiError as error:
+            print(f"Skipping query because YouTube API returned an error: {error}")
+            continue
 
         for video_id in query_ids:
             if video_id not in seen_ids:
                 candidate_ids.append(video_id)
                 seen_ids.add(video_id)
 
+        if query_hit_quota:
+            quota_exceeded = True
+            break
+
     print(f"Found {len(candidate_ids)} unique candidate videos.")
 
-    videos = fetch_video_details(api_key, candidate_ids)
+    if not candidate_ids:
+        return []
+
+    try:
+        videos = fetch_video_details(api_key, candidate_ids)
+    except YouTubeApiError as error:
+        if error.is_quota_exceeded():
+            print("YouTube API quota exceeded before video statistics could be fetched.")
+            print("Saving discovered URLs without popularity filtering.")
+            return [make_quota_limited_video(video_id) for video_id in candidate_ids[: args.limit]]
+        raise
+
     normalized_videos = [normalize_video(video) for video in videos]
     popular_videos = [
         video
@@ -266,6 +329,9 @@ def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
         and not title_contains_excluded_term(video, args.exclude_terms)
     ]
     popular_videos.sort(key=lambda video: video["view_count"], reverse=True)
+
+    if quota_exceeded:
+        print("Results are partial because the YouTube API quota was reached.")
 
     return popular_videos[: args.limit]
 
@@ -332,7 +398,7 @@ def main() -> None:
     if len(videos) < args.limit:
         print(
             f"Requested {args.limit} videos, but only {len(videos)} matched the filters. "
-            "YouTube API pagination, quota, captions, and search ranking can limit results."
+            "YouTube API pagination, daily quota, captions, and search ranking can limit results."
         )
 
 
