@@ -3,7 +3,7 @@ from openai import OpenAI
 from config import VECTOR_STORE_ID_FILE, require_openai_api_key
 
 
-MODEL_NAME = "gpt-4.1-mini"
+MODEL_NAME = "gpt-5.4-mini"
 
 COACH_INSTRUCTIONS = """
 Te egy League of Legends coaching asszisztens vagy.
