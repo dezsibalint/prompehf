@@ -19,6 +19,31 @@ DEFAULT_QUERIES = [
     "LoL macro guide",
     "LoL jungle guide",
     "LoL wave management",
+    "LoL beginner guide",
+    "LoL advanced guide",
+    "League of Legends macro coaching",
+    "League of Legends jungle coaching",
+    "League of Legends laning guide",
+    "LoL top lane guide",
+    "LoL mid lane guide",
+    "LoL ADC guide",
+    "LoL support guide",
+    "LoL warding guide",
+    "LoL roaming guide",
+    "LoL recall timing",
+    "LoL objective control",
+]
+DEFAULT_EXCLUDE_TERMS = [
+    "2xko",
+    "tft",
+    "teamfight tactics",
+    "set 17",
+    "trailer",
+    "spotlight",
+    "cinematic",
+    "skin",
+    "skins",
+    "wild rift",
 ]
 
 
@@ -41,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-views",
         type=int,
-        default=50_000,
+        default=5_000,
         help="Only include videos with at least this many views.",
     )
     parser.add_argument(
@@ -51,12 +76,24 @@ def parse_args() -> argparse.Namespace:
         help="Search queries to use. Put each query in quotes.",
     )
     parser.add_argument(
+        "--exclude-terms",
+        nargs="+",
+        default=DEFAULT_EXCLUDE_TERMS,
+        help="Skip videos whose title contains any of these terms.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT_FILE,
         help="Output file for discovered YouTube URLs.",
     )
-    parser.add_argument(
+    output_mode = parser.add_mutually_exclusive_group()
+    output_mode.add_argument(
+        "--append",
+        action="store_true",
+        help="Append unique URLs to the output file. This is the default behavior.",
+    )
+    output_mode.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace the output file instead of appending unique URLs.",
@@ -76,6 +113,12 @@ def parse_args() -> argparse.Namespace:
         "--language",
         default="en",
         help="Preferred result language.",
+    )
+    parser.add_argument(
+        "--caption",
+        choices=["closedCaption", "any"],
+        default="closedCaption",
+        help="Caption filter for YouTube search. Use 'any' to discover more candidates.",
     )
     return parser.parse_args()
 
@@ -107,6 +150,7 @@ def search_video_ids(
     max_pages: int,
     region: str,
     language: str,
+    caption: str,
 ) -> list[str]:
     """Search YouTube and return candidate video ids."""
     video_ids = []
@@ -120,11 +164,13 @@ def search_video_ids(
             "q": query,
             "order": "viewCount",
             "publishedAfter": published_after,
-            "videoCaption": "closedCaption",
             "maxResults": 50,
             "regionCode": region,
             "relevanceLanguage": language,
         }
+
+        if caption != "any":
+            params["videoCaption"] = caption
 
         if next_page_token:
             params["pageToken"] = next_page_token
@@ -177,6 +223,11 @@ def normalize_video(video: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def title_contains_excluded_term(video: dict[str, Any], exclude_terms: list[str]) -> bool:
+    title = video["title"].lower()
+    return any(term.lower() in title for term in exclude_terms)
+
+
 def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
     api_key = require_youtube_api_key()
     published_after = months_ago_as_iso(args.months)
@@ -196,6 +247,7 @@ def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
             max_pages=args.max_pages_per_query,
             region=args.region,
             language=args.language,
+            caption=args.caption,
         )
 
         for video_id in query_ids:
@@ -208,7 +260,10 @@ def discover_videos(args: argparse.Namespace) -> list[dict[str, Any]]:
     videos = fetch_video_details(api_key, candidate_ids)
     normalized_videos = [normalize_video(video) for video in videos]
     popular_videos = [
-        video for video in normalized_videos if video["view_count"] >= args.min_views
+        video
+        for video in normalized_videos
+        if video["view_count"] >= args.min_views
+        and not title_contains_excluded_term(video, args.exclude_terms)
     ]
     popular_videos.sort(key=lambda video: video["view_count"], reverse=True)
 

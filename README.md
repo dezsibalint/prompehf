@@ -111,18 +111,20 @@ Egy sorba egy YouTube video URL kerüljön. Az üres sorokat és a `#` karakterr
 Opcionális automatikus videókeresés YouTube Data API-val:
 
 ```bash
-python src/discover_youtube_guides.py --limit 100 --output examples/video_urls.txt --overwrite
+python src/discover_youtube_guides.py --limit 100 --output examples/video_urls.txt --append
 ```
 
 Nagyobb tudásbázishoz például:
 
 ```bash
-python src/discover_youtube_guides.py --limit 1000 --months 3 --min-views 50000 --output examples/video_urls.txt --overwrite
+python src/discover_youtube_guides.py --limit 1000 --months 6 --min-views 5000 --max-pages-per-query 15 --output examples/video_urls.txt --append
 ```
 
 Ez a külön modul az elmúlt 3 hónap népszerű, angol felirattal rendelkező League of Legends guide videóit keresi. A meglévő kézi workflow továbbra is működik, mert a `download_transcripts.py` továbbra is az `examples/video_urls.txt` fájlból dolgozik.
 
-Fontos: a YouTube Data API keresési végpontja kvótát használ, és egy lekérés jelentős quota costtal jár. Emiatt a `--limit 1000` parancs technikailag támogatott, de a ténylegesen megtalált videók száma függhet az API kvótától, a keresési találatoktól, a feliratok elérhetőségétől és a szűrőktől.
+A `--append` az alapértelmezett viselkedés, vagyis a script csak az új, még nem szereplő URL-eket fűzi hozzá a fájlhoz. A `--overwrite` akkor hasznos, ha teljesen újra akarod generálni a videólistát.
+
+Fontos: a YouTube Data API keresési végpontja kvótát használ, és egy lekérés jelentős quota costtal jár. Emiatt a `--limit 1000` parancs technikailag támogatott, de a ténylegesen megtalált videók száma függhet az API kvótától, a keresési találatoktól, a feliratok elérhetőségétől és a szűrőktől. Ha kevés találat jön vissza, csökkentsd a `--min-views` értékét, növeld a `--months` értékét, vagy próbáld a `--caption any` kapcsolót.
 
 2. Transcript letöltés:
 
